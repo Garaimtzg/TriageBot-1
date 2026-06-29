@@ -10,7 +10,23 @@
       <th class="px-3 py-2 text-left text-sm font-semibold">Creado</th>
     </tr>
   </thead>
-  <tbody id="tickets-table-body">
-    <!-- TODO: renderizar tickets con Jinja2 -->
+  <tbody id="tickets-table-body" class="divide-y divide-slate-100">
+    {% for ticket in tickets %}
+    <tr class="hover:bg-slate-50">
+      <td class="px-3 py-2 text-sm text-slate-500">{{ ticket.id }}</td>
+      <td class="px-3 py-2 text-sm font-medium">{{ ticket.title }}</td>
+      <td class="px-3 py-2 text-sm">{{ ticket.category }}</td>
+      <td class="px-3 py-2 text-sm">{{ ticket.priority }}</td>
+      <td class="px-3 py-2 text-sm text-slate-600">{{ ticket.tags | join(", ") }}</td>
+      <td class="px-3 py-2 text-sm">{{ ticket.status }}</td>
+      <td class="px-3 py-2 text-sm text-slate-500">{{ ticket.created_at }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="7" class="px-3 py-6 text-center text-sm text-slate-400">
+        No hay tickets que coincidan con los filtros.
+      </td>
+    </tr>
+    {% endfor %}
   </tbody>
 </table>
