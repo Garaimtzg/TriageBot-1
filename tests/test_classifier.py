@@ -8,17 +8,69 @@ from __future__ import annotations
 
 import json
 
-from app.classifier import FALLBACK_CLASSIFICATION, _coerce, classify_ticket
+from app.classifier import (
+    FALLBACK_CLASSIFICATION,
+    _coerce,
+    _heuristic_classify,
+    classify_ticket,
+)
 
 
-def test_classify_ticket_without_api_key_returns_fallback(monkeypatch):
+def test_classify_ticket_without_api_key_uses_heuristic(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
-    result = classify_ticket("La app no carga", "Pantalla en blanco al iniciar sesión")
+    # Without a key we must NOT collapse everything into the same bucket:
+    # an urgent incident and a routine question get different results.
+    urgent = classify_ticket(
+        "Esto urge, tenemos demo el viernes",
+        "El cliente necesita una solución antes de una demo crítica",
+    )
+    question = classify_ticket(
+        "¿Cómo solicito acceso de solo lectura?",
+        "Necesito saber cómo pido ese permiso",
+    )
 
-    assert result == FALLBACK_CLASSIFICATION
-    # Must be a copy, never the shared module-level constant.
-    assert result is not FALLBACK_CLASSIFICATION
+    assert urgent["category"] == "urgent"
+    assert urgent["priority"] == "P1"
+    assert question["category"] == "question"
+    assert question["priority"] == "P3"
+    assert urgent != question
+
+
+def test_heuristic_precedence_and_priorities():
+    urgent = _heuristic_classify("La app no funciona", "Está caída en producción")
+    bug = _heuristic_classify("El visor de PDF", "No muestra la última página")
+    feature = _heuristic_classify(
+        "Exportar a PDF", "Me vendría bien poder exportar informes"
+    )
+    question = _heuristic_classify("Política de roaming", "¿Puedo usar datos fuera?")
+
+    assert (urgent["category"], urgent["priority"]) == ("urgent", "P1")
+    assert (bug["category"], bug["priority"]) == ("bug", "P2")
+    assert (feature["category"], feature["priority"]) == ("feature_request", "P3")
+    assert (question["category"], question["priority"]) == ("question", "P3")
+
+
+def test_heuristic_urgent_beats_bug_when_both_present():
+    result = _heuristic_classify("Error grave", "La app no funciona, urge solucionarlo")
+
+    assert result["category"] == "urgent"
+    assert result["priority"] == "P1"
+
+
+def test_heuristic_derives_tags():
+    result = _heuristic_classify("Exportar a PDF", "Quiero exportar el informe a PDF")
+
+    assert "pdf" in result["tags"]
+    assert "export" in result["tags"]
+
+
+def test_heuristic_unmatched_defaults_to_question():
+    result = _heuristic_classify("Asunto", "Texto neutro sin señales claras")
+
+    assert result["category"] == "question"
+    assert result["priority"] == "P3"
+    assert result["tags"] == []
 
 
 def test_coerce_replaces_invalid_values_with_fallback():
@@ -73,7 +125,7 @@ def test_classify_ticket_parses_valid_llm_response(monkeypatch):
     assert result == payload
 
 
-def test_classify_ticket_never_raises_on_sdk_error(monkeypatch):
+def test_classify_ticket_falls_back_to_heuristic_on_sdk_error(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     class _BoomClient:
@@ -82,6 +134,13 @@ def test_classify_ticket_never_raises_on_sdk_error(monkeypatch):
 
     monkeypatch.setattr("openai.OpenAI", _BoomClient)
 
-    result = classify_ticket("titulo", "descripcion")
+    # Even when the SDK blows up, we still differentiate via the heuristic
+    # instead of returning the same flat constant for everything.
+    result = classify_ticket("La app está caída", "No funciona en producción, urge")
 
-    assert result == FALLBACK_CLASSIFICATION
+    assert result["category"] == "urgent"
+    assert result["priority"] == "P1"
+
+    # And neutral text still degrades gracefully to the safe default.
+    neutral = classify_ticket("Asunto", "Texto neutro")
+    assert neutral == FALLBACK_CLASSIFICATION
