@@ -1,9 +1,10 @@
 """LLM-based ticket classification with a safe fallback.
 
-The classifier asks Claude to return strict JSON with ``category``, ``priority``
-and ``tags``. Any problem (missing API key, network error, malformed output,
-invalid values) results in :data:`FALLBACK_CLASSIFICATION` so the API never
-crashes and never propagates SDK exceptions to the caller.
+Uses the OpenAI SDK pointed at OpenRouter (model ``gpt-oss-120b``) as mandated by
+the project stack. The model is asked to return strict JSON with ``category``,
+``priority`` and ``tags``. Any problem (missing API key, network error,
+malformed output, invalid values) results in :data:`FALLBACK_CLASSIFICATION` so
+the API never crashes and never propagates SDK exceptions to the caller.
 """
 
 from __future__ import annotations
@@ -15,7 +16,8 @@ from app.models import ALLOWED_CATEGORIES, ALLOWED_PRIORITIES
 
 FALLBACK_CLASSIFICATION = {"category": "question", "priority": "P3", "tags": []}
 
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "openai/gpt-oss-120b"
+BASE_URL = "https://openrouter.ai/api/v1"
 
 SYSTEM_PROMPT = (
     "Eres un clasificador de tickets de soporte. Respondes SIEMPRE con un único "
@@ -46,28 +48,29 @@ def _coerce(result: dict) -> dict:
 def classify_ticket(title: str, description: str) -> dict:
     """Classify a support ticket into category, priority and tags.
 
-    Never raises: returns FALLBACK_CLASSIFICATION on any error.
+    Never raises: returns a copy of FALLBACK_CLASSIFICATION on any error.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         return dict(FALLBACK_CLASSIFICATION)
 
     try:
-        import anthropic
+        from openai import OpenAI
 
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
+        client = OpenAI(api_key=api_key, base_url=BASE_URL)
+        completion = client.chat.completions.create(
             model=MODEL,
             max_tokens=256,
-            system=SYSTEM_PROMPT,
+            response_format={"type": "json_object"},
             messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": f"Título: {title}\n\nDescripción: {description}",
-                }
+                },
             ],
         )
-        text = "".join(block.text for block in message.content if block.type == "text")
+        text = completion.choices[0].message.content or ""
         return _coerce(json.loads(text))
     except Exception:
         # Network failure, missing SDK, malformed JSON, etc. → safe fallback.
