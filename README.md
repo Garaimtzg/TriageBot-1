@@ -9,7 +9,7 @@ Durante el bootcamp construiréis una aplicación web interna para clasificar ti
 TriageBot permite:
 
 - Crear tickets con `title` y `description`.
-- Clasificarlos automáticamente con Claude en:
+- Clasificarlos automáticamente con un LLM (gpt-oss-120b vía OpenRouter) en:
   - `category`: `bug`, `feature_request`, `question`, `urgent`
   - `priority`: `P1`, `P2`, `P3`
   - `tags`: lista de etiquetas cortas.
@@ -25,7 +25,7 @@ TriageBot permite:
 | Backend | FastAPI |
 | Datos | SQLite |
 | Frontend | HTML + HTMX + Tailwind CDN |
-| LLM | Claude vía API de Anthropic |
+| LLM | gpt-oss-120b vía OpenRouter (SDK de OpenAI) |
 | Tests | pytest |
 | CI/CD | GitHub Actions |
 | IDE + IA | VS Code + Claude Code |
@@ -45,7 +45,7 @@ cp .env.example .env
 Edita `.env` y añade tu API key:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+OPENROUTER_API_KEY=sk-or-...
 ```
 
 Comprueba que `.env` está ignorado por Git:
