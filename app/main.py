@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -18,11 +19,18 @@ from app.models import (
     TicketUpdate,
 )
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load the project-local .env (if present) so OPENROUTER_API_KEY and other
+# settings are picked up by default when the app starts (e.g. via uvicorn).
+# Variables already set in the environment take precedence (override=False),
+# so an explicit `export` still wins over the .env file.
+load_dotenv(BASE_DIR / ".env")
+
 logger = logging.getLogger("triagebot.main")
 
 app = FastAPI(title="TriageBot")
 
-BASE_DIR = Path(__file__).resolve().parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
