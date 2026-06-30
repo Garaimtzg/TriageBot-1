@@ -55,11 +55,13 @@ def _compute_due_date(created_iso: str, priority: str) -> str | None:
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(_database_path())
     conn.row_factory = sqlite3.Row
+    # Enforce foreign keys so ON DELETE CASCADE works for ticket assignees.
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
 def init_db() -> None:
-    """Create the tickets table if it does not exist yet, then run migrations."""
+    """Create the tickets/users/assignee tables if needed, then run migrations."""
     with _connect() as conn:
         conn.execute(
             """
@@ -74,6 +76,28 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 due_date TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ticket_assignees (
+                ticket_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                PRIMARY KEY (ticket_id, user_id),
+                FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
         )
@@ -97,7 +121,88 @@ def _migrate(conn: sqlite3.Connection) -> None:
             )
 
 
-def _row_to_dict(row: sqlite3.Row) -> dict:
+# --- Users -----------------------------------------------------------------
+
+
+def _public_user(row: sqlite3.Row | dict) -> dict:
+    """Project a user row to its public shape (never expose the password hash)."""
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "email": row["email"],
+        "created_at": row["created_at"],
+    }
+
+
+def create_user(*, name: str, email: str, password_hash: str) -> dict:
+    """Insert a user and return its public dict. Raises on duplicate email."""
+    init_db()
+    now = _now()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO users (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+            (name, email, password_hash, now),
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+    return get_user(user_id)
+
+
+def get_user(user_id: int) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return _public_user(row) if row else None
+
+
+def get_user_by_email(email: str) -> dict | None:
+    """Return the full user row (including ``password_hash``) for authentication."""
+    init_db()
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_users() -> list[dict]:
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute("SELECT * FROM users ORDER BY name COLLATE NOCASE").fetchall()
+    return [_public_user(row) for row in rows]
+
+
+def _existing_user_ids(conn: sqlite3.Connection, user_ids: list[int]) -> list[int]:
+    """Filter ``user_ids`` down to the ones that actually exist (order preserved)."""
+    if not user_ids:
+        return []
+    rows = conn.execute("SELECT id FROM users").fetchall()
+    known = {row["id"] for row in rows}
+    seen: set[int] = set()
+    result: list[int] = []
+    for uid in user_ids:
+        if uid in known and uid not in seen:
+            seen.add(uid)
+            result.append(uid)
+    return result
+
+
+# --- Tickets ---------------------------------------------------------------
+
+
+def _assignees_for(conn: sqlite3.Connection, ticket_id: int) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT u.id, u.name, u.email, u.created_at
+        FROM ticket_assignees ta
+        JOIN users u ON u.id = ta.user_id
+        WHERE ta.ticket_id = ?
+        ORDER BY u.name COLLATE NOCASE
+        """,
+        (ticket_id,),
+    ).fetchall()
+    return [_public_user(row) for row in rows]
+
+
+def _row_to_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
     due_date = row["due_date"]
     status = row["status"]
     # Vencido = tiene fecha límite pasada y no está en un estado terminal.
@@ -112,11 +217,22 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "priority": row["priority"],
         "tags": json.loads(row["tags"]),
         "status": row["status"],
+        "assignees": _assignees_for(conn, row["id"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "due_date": due_date,
         "is_overdue": is_overdue,
     }
+
+
+def _set_assignees(conn: sqlite3.Connection, ticket_id: int, user_ids: list[int]) -> None:
+    """Replace the assignees of a ticket with the given (validated) user ids."""
+    valid = _existing_user_ids(conn, user_ids)
+    conn.execute("DELETE FROM ticket_assignees WHERE ticket_id = ?", (ticket_id,))
+    conn.executemany(
+        "INSERT INTO ticket_assignees (ticket_id, user_id) VALUES (?, ?)",
+        [(ticket_id, uid) for uid in valid],
+    )
 
 
 def create_ticket(
@@ -127,8 +243,9 @@ def create_ticket(
     priority: str,
     tags: list[str],
     status: str = _DEFAULT_STATUS,
+    assignee_ids: list[int] | None = None,
 ) -> dict:
-    """Insert a ticket and return it as a dict."""
+    """Insert a ticket (with optional assignees) and return it as a dict."""
     init_db()
     now = _now()
     due_date = _compute_due_date(now, priority)
@@ -145,8 +262,9 @@ def create_ticket(
                 status, now, now, due_date,
             ),
         )
-        conn.commit()
         ticket_id = cursor.lastrowid
+        _set_assignees(conn, ticket_id, assignee_ids or [])
+        conn.commit()
     return get_ticket(ticket_id)
 
 
@@ -154,7 +272,7 @@ def get_ticket(ticket_id: int) -> dict | None:
     init_db()
     with _connect() as conn:
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
-    return _row_to_dict(row) if row else None
+        return _row_to_dict(conn, row) if row else None
 
 
 def _filter_sql(
@@ -221,7 +339,7 @@ def list_tickets(
 
     with _connect() as conn:
         rows = conn.execute(query, params).fetchall()
-    return [_row_to_dict(row) for row in rows]
+        return [_row_to_dict(conn, row) for row in rows]
 
 
 def count_tickets(
@@ -243,11 +361,18 @@ def count_tickets(
 
 
 def update_ticket(ticket_id: int, fields: dict) -> dict | None:
-    """Update the given fields of a ticket and bump updated_at. Returns the ticket."""
+    """Update the given fields of a ticket and bump updated_at. Returns the ticket.
+
+    Only ``status``/``priority``/``category`` columns may change. ``assignee_ids``
+    (when provided and not ``None``) replaces the ticket's assignees.
+    """
     init_db()
     allowed = {"status", "priority", "category"}
     updates = {key: value for key, value in fields.items() if key in allowed and value is not None}
-    if not updates:
+    assignee_ids = fields.get("assignee_ids")
+    reassign = assignee_ids is not None
+
+    if not updates and not reassign:
         return get_ticket(ticket_id)
 
     # La fecha límite depende de la prioridad: si cambia, se recalcula desde la
@@ -257,14 +382,16 @@ def update_ticket(ticket_id: int, fields: dict) -> dict | None:
         if current is not None:
             updates["due_date"] = _compute_due_date(current["created_at"], updates["priority"])
 
-    set_clause = ", ".join(f"{key} = ?" for key in updates)
-    params = list(updates.values())
-    params.append(_now())  # updated_at
-    params.append(ticket_id)
-
     with _connect() as conn:
+        if reassign:
+            _set_assignees(conn, ticket_id, assignee_ids)
+        set_clauses = [f"{key} = ?" for key in updates]
+        params: list = list(updates.values())
+        set_clauses.append("updated_at = ?")
+        params.append(_now())
+        params.append(ticket_id)
         conn.execute(
-            f"UPDATE tickets SET {set_clause}, updated_at = ? WHERE id = ?",
+            f"UPDATE tickets SET {', '.join(set_clauses)} WHERE id = ?",
             params,
         )
         conn.commit()

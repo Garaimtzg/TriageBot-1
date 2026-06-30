@@ -10,6 +10,10 @@ ignore = []
 # The acceptance tests are frozen (must not be modified); allow their long lines.
 "tests/test_acceptance.py" = ["E501"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI uses callables (Depends/Form/...) as argument defaults by design.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Form", "fastapi.Query"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

@@ -38,3 +38,20 @@
 {% macro category_badge(category) -%}
   <span class="inline-flex items-center rounded-md bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-700">{{ category }}</span>
 {%- endmacro %}
+
+{# Compact responsibles display: an avatar with the user's initial + their name. #}
+{% macro assignee_badges(assignees) -%}
+  {% if assignees %}
+  <div class="flex flex-wrap items-center gap-1.5">
+    {% for u in assignees %}
+    <span class="inline-flex items-center gap-1 rounded-full bg-navy-50 py-0.5 pl-0.5 pr-2 text-xs font-medium text-navy-700 ring-1 ring-inset ring-navy-100"
+          title="{{ u.email }}">
+      <span class="grid h-4 w-4 place-items-center rounded-full bg-navy-600 text-[10px] font-bold text-white">{{ u.name[0]|upper }}</span>
+      {{ u.name }}
+    </span>
+    {% endfor %}
+  </div>
+  {% else %}
+  <span class="text-xs text-navy-400">Sin asignar</span>
+  {% endif %}
+{%- endmacro %}

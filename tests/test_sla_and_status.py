@@ -82,12 +82,24 @@ def client(tmp_path, monkeypatch):
         "app.classifier.classify_ticket",
         lambda title, description: {"category": "bug", "priority": "P2", "tags": []},
     )
-    return TestClient(app)
+    c = TestClient(app)
+    # La UI requiere sesión: registrarse inicia sesión (deja la cookie en el cliente).
+    resp = c.post(
+        "/register",
+        data={"name": "Tester", "email": "tester@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    return c
 
 
 def test_status_lifecycle_start_resolve_reopen(client):
     """open -> en curso -> resuelto -> reabrir, vía el endpoint de la UI."""
-    client.post("/ui/tickets", data={"title": "Ticket ciclo", "description": "detalle"})
+    uid = db.list_users()[0]["id"]
+    client.post(
+        "/ui/tickets",
+        data={"title": "Ticket ciclo", "description": "detalle", "assignee_ids": [uid]},
+    )
 
     # Empezar: pasa a "En curso" y dispara el refresco del tablero.
     started = client.post("/ui/tickets/1/status", data={"new_status": "in_progress"})
@@ -108,7 +120,10 @@ def test_status_lifecycle_start_resolve_reopen(client):
 
 
 def test_status_endpoint_rejects_unknown_status_and_missing_ticket(client):
-    client.post("/ui/tickets", data={"title": "T", "description": "d"})
+    uid = db.list_users()[0]["id"]
+    client.post(
+        "/ui/tickets", data={"title": "T", "description": "d", "assignee_ids": [uid]}
+    )
 
     # Estado inexistente -> 422, sin tocar el ticket.
     bad = client.post("/ui/tickets/1/status", data={"new_status": "patata"})

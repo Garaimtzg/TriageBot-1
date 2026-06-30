@@ -28,6 +28,11 @@ ticket:
 validation:
   title_max_len: 200
   description_max_len: 5000
+  # Gestión de usuarios (registro / login).
+  name_max_len: 80
+  email_max_len: 254
+  password_min_len: 8
+  password_max_len: 128
 
 database:
   # Si la variable de entorno indicada existe, tiene prioridad sobre default_url.

@@ -1,10 +1,11 @@
-{% from "_macros.html" import priority_badge, status_badge, due_cell %}
+{% from "_macros.html" import priority_badge, status_badge, due_cell, assignee_badges %}
 <div class="overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-navy-100">
   <table class="min-w-full divide-y divide-navy-100">
     <thead class="bg-navy-800 text-white">
       <tr>
         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">ID</th>
         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Título</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Responsables</th>
         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Prioridad</th>
         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Estado</th>
         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Vence</th>
@@ -18,13 +19,14 @@
           hx-swap="innerHTML">
         <td class="px-4 py-3 text-sm text-navy-400">#{{ ticket.id }}</td>
         <td class="px-4 py-3 text-sm font-medium text-navy-900">{{ ticket.title }}</td>
+        <td class="px-4 py-3 text-sm">{{ assignee_badges(ticket.assignees) }}</td>
         <td class="px-4 py-3 text-sm">{{ priority_badge(ticket.priority) }}</td>
         <td class="px-4 py-3 text-sm">{{ status_badge(ticket.status) }}</td>
         <td class="px-4 py-3 text-sm">{{ due_cell(ticket) }}</td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="5" class="px-4 py-10 text-center text-sm text-navy-400">
+        <td colspan="6" class="px-4 py-10 text-center text-sm text-navy-400">
           No hay tickets que coincidan con los filtros.
         </td>
       </tr>
