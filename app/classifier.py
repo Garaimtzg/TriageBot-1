@@ -16,10 +16,13 @@ endpoint if even the heuristic somehow fails.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import unicodedata
 
 from app.models import ALLOWED_CATEGORIES, ALLOWED_PRIORITIES
+
+logger = logging.getLogger("triagebot.classifier")
 
 FALLBACK_CLASSIFICATION = {"category": "question", "priority": "P3", "tags": []}
 
@@ -222,6 +225,10 @@ def classify_ticket(title: str, description: str) -> dict:
     """
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
+        logger.info(
+            "Clasificación SIN modelo: no hay OPENROUTER_API_KEY; "
+            "se usa la heurística interna."
+        )
         return _heuristic_classify(title, description)
 
     try:
@@ -241,7 +248,13 @@ def classify_ticket(title: str, description: str) -> dict:
             ],
         )
         text = completion.choices[0].message.content or ""
-        return _coerce(json.loads(text))
+        result = _coerce(json.loads(text))
+        logger.info("Clasificación CON modelo: usado %s vía OpenRouter.", MODEL)
+        return result
     except Exception:
         # Network failure, missing SDK, malformed JSON, etc. → heuristic fallback.
+        logger.warning(
+            "Clasificación SIN modelo: el modelo no está disponible; "
+            "se usa la heurística interna."
+        )
         return _heuristic_classify(title, description)

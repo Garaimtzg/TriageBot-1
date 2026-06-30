@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -50,6 +51,10 @@ def _classify_safely(title: str, description: str) -> dict:
             "tags": result.get("tags", []),
         }
     except Exception:
+        logger.warning(
+            "Clasificación SIN modelo: fallo inesperado del clasificador; "
+            "se usa el valor por defecto."
+        )
         return dict(classifier.FALLBACK_CLASSIFICATION)
 
 
