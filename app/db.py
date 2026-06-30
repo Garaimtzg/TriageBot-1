@@ -1,8 +1,9 @@
 """SQLite persistence for TriageBot.
 
-The database path is resolved at call time from the ``DATABASE_URL`` environment
-variable (format ``sqlite:///path/to.db``). This lets the test suite point each
-test at an isolated database after the app module has been imported.
+The database path is resolved at call time from the environment variable named
+in ``config.yaml`` (``database.url_env``, by default ``DATABASE_URL``; format
+``sqlite:///path/to.db``). Reading it fresh on every call lets the test suite
+point each test at an isolated database after the app module has been imported.
 """
 
 from __future__ import annotations
@@ -12,12 +13,15 @@ import os
 import sqlite3
 from datetime import UTC, datetime
 
-DEFAULT_DATABASE_URL = "sqlite:///triagebot.db"
+from app.config import get_config
+
+_db_cfg = get_config()["database"]
+_DEFAULT_STATUS = get_config()["ticket"]["default_status"]
 
 
 def _database_path() -> str:
-    """Resolve the SQLite file path from DATABASE_URL (read fresh on every call)."""
-    url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    """Resolve the SQLite file path from config + env (read fresh on every call)."""
+    url = os.getenv(_db_cfg["url_env"], _db_cfg["default_url"])
     if url.startswith("sqlite:///"):
         return url[len("sqlite:///") :]
     if url.startswith("sqlite://"):
@@ -77,7 +81,7 @@ def create_ticket(
     category: str,
     priority: str,
     tags: list[str],
-    status: str = "open",
+    status: str = _DEFAULT_STATUS,
 ) -> dict:
     """Insert a ticket and return it as a dict."""
     init_db()

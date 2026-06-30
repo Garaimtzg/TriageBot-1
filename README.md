@@ -56,6 +56,23 @@ git status
 
 `.env` **no debe aparecer**.
 
+## Configuración (`config.yaml`)
+
+Todos los parámetros ajustables viven en [`config.yaml`](config.yaml) — **no hay
+valores hardcodeados en el código** (ni siquiera el *prompt* del clasificador):
+
+- `ticket`: catálogo de `categories`, `priorities`, `statuses` y `default_status`.
+- `validation`: longitudes máximas de `title` y `description`.
+- `database`: nombre de la env var de la URL (`url_env`) y `default_url`.
+- `classifier`: `model`, `base_url`, `max_tokens`, `system_prompt`, valor de
+  `fallback` y la heurística por palabras clave. `api_key_env` indica el
+  **nombre** de la variable de entorno con la API key.
+
+`config.yaml` **no contiene secretos**: la API key se sigue leyendo de la
+variable de entorno indicada en `classifier.api_key_env` (por defecto
+`OPENROUTER_API_KEY`). La ruta del fichero puede sobreescribirse con la env var
+`CONFIG_PATH`.
+
 ## Ejecutar tests
 
 ```bash
