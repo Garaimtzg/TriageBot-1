@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TriageBot{% block title %}{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: {
+              50: "#eef3fa", 100: "#d7e1f1", 200: "#b0c3e0", 300: "#839ecb",
+              400: "#5778b0", 500: "#3a5a8c", 600: "#2b446c", 700: "#1f3354",
+              800: "#152744", 900: "#0d1b30",
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* HTMX request indicator (Tailwind CDN doesn't ship these). */
+    .htmx-indicator { opacity: 0; pointer-events: none; transition: opacity .15s ease-in; }
+    .htmx-request.htmx-indicator,
+    .htmx-request .htmx-indicator { opacity: 1; pointer-events: auto; }
+  </style>
+</head>
+<body class="min-h-screen bg-navy-50 text-navy-900">
+  <!-- Top navigation -->
+  <header class="bg-navy-900 text-white shadow-md">
+    <nav class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+      <div class="flex items-center gap-2">
+        <span class="grid h-8 w-8 place-items-center rounded-md bg-navy-600 text-sm font-bold">TB</span>
+        <span class="text-lg font-semibold tracking-tight">TriageBot</span>
+      </div>
+      <div class="flex items-center gap-1 text-sm font-medium">
+        <a href="/"
+           class="rounded-md px-3 py-2 transition {% if active == 'create' %}bg-white text-navy-900{% else %}text-navy-100 hover:bg-navy-700{% endif %}">
+          Nuevo ticket
+        </a>
+        <a href="/board"
+           class="rounded-md px-3 py-2 transition {% if active == 'board' %}bg-white text-navy-900{% else %}text-navy-100 hover:bg-navy-700{% endif %}">
+          Tablero
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="mx-auto max-w-5xl px-6 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Modal host (ticket detail). Filled by HTMX, cleared on close. -->
+  <div id="modal"></div>
+
+  <!-- Success toast -->
+  <div id="toast"
+       class="pointer-events-none fixed bottom-6 right-6 z-50 translate-y-3 opacity-0 transition-all duration-300">
+    <div class="flex items-center gap-3 rounded-lg bg-navy-800 px-4 py-3 text-sm text-white shadow-lg ring-1 ring-navy-600">
+      <svg class="h-5 w-5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 111.4-1.4l3.1 3.1 6.8-6.8a1 1 0 011.4 0z" clip-rule="evenodd"/>
+      </svg>
+      <span id="toast-msg">Ticket creado correctamente.</span>
+    </div>
+  </div>
+
+  <script>
+    // Show the success popup when the server signals a new ticket was created.
+    document.body.addEventListener("ticketCreated", function () {
+      const toast = document.getElementById("toast");
+      toast.classList.remove("translate-y-3", "opacity-0");
+      toast.classList.add("translate-y-0", "opacity-100");
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(function () {
+        toast.classList.add("translate-y-3", "opacity-0");
+        toast.classList.remove("translate-y-0", "opacity-100");
+      }, 2800);
+    });
+
+    // Close the detail modal with the Escape key.
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") document.getElementById("modal").innerHTML = "";
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

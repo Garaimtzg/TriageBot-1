@@ -95,6 +95,9 @@ def update_ticket(ticket_id: int, payload: TicketUpdate) -> dict:
 
 # --- Frontend (HTMX + Jinja2) ---------------------------------------------
 
+PAGE_SIZE = 10
+RECENT_LIMIT = 6
+
 
 def _filter_options() -> dict:
     return {
@@ -104,13 +107,74 @@ def _filter_options() -> dict:
     }
 
 
+def _board_context(
+    *,
+    category: str | None,
+    priority: str | None,
+    status: str | None,
+    q: str | None,
+    page: int,
+) -> dict:
+    """Shared context for the paginated board table fragment + page links."""
+    category = category or None
+    priority = priority or None
+    status = status or None
+    search = (q or "").strip() or None
+
+    total = db.count_tickets(
+        category=category, priority=priority, status=status, search=search
+    )
+    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = max(1, min(page, total_pages))
+    tickets = db.list_tickets(
+        category=category,
+        priority=priority,
+        status=status,
+        search=search,
+        limit=PAGE_SIZE,
+        offset=(page - 1) * PAGE_SIZE,
+    )
+    return {
+        "tickets": tickets,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        # Echo filters back so pagination links preserve them.
+        "f_category": category or "",
+        "f_priority": priority or "",
+        "f_status": status or "",
+        "f_q": search or "",
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
-    tickets = db.list_tickets()
+    """Page 1: create a ticket and see it appear in the recent list."""
+    recent = db.list_tickets(limit=RECENT_LIMIT)
     return templates.TemplateResponse(
         request,
-        "index.html",
-        {"tickets": tickets, **_filter_options()},
+        "create.html",
+        {"recent": recent, "active": "create"},
+    )
+
+
+@app.get("/board", response_class=HTMLResponse)
+def board(
+    request: Request,
+    category: str | None = None,
+    priority: str | None = None,
+    status: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+) -> HTMLResponse:
+    """Page 2: paginated, filterable, searchable board."""
+    context = _board_context(
+        category=category, priority=priority, status=status, q=q, page=page
+    )
+    return templates.TemplateResponse(
+        request,
+        "board.html",
+        {**context, **_filter_options(), "active": "board"},
     )
 
 
@@ -120,15 +184,24 @@ def ui_tickets_table(
     category: str | None = None,
     priority: str | None = None,
     status: str | None = None,
+    q: str | None = None,
+    page: int = 1,
 ) -> HTMLResponse:
-    """HTML fragment with the tickets table, used by HTMX for live filtering."""
-    tickets = db.list_tickets(
-        category=category or None,
-        priority=priority or None,
-        status=status or None,
+    """HTML fragment with the paginated board table (HTMX live filter/search/paging)."""
+    context = _board_context(
+        category=category, priority=priority, status=status, q=q, page=page
     )
+    return templates.TemplateResponse(request, "_board_table.html", context)
+
+
+@app.get("/ui/tickets/{ticket_id}", response_class=HTMLResponse)
+def ui_ticket_detail(request: Request, ticket_id: int) -> HTMLResponse:
+    """Modal fragment with the full ticket detail (all fields)."""
+    ticket = db.get_ticket(ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
     return templates.TemplateResponse(
-        request, "_tickets_table.html", {"tickets": tickets}
+        request, "_ticket_detail.html", {"ticket": ticket}
     )
 
 
@@ -138,13 +211,19 @@ def ui_create_ticket(
     title: str = Form(...),
     description: str = Form(...),
 ) -> HTMLResponse:
-    """Create a ticket from the HTML form and return the refreshed table fragment."""
+    """Create a ticket from the form and return the refreshed recent-tickets list.
+
+    Sets the ``ticketCreated`` HX-Trigger so the page can show a success popup.
+    """
     try:
         payload = TicketCreate(title=title, description=description)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _create_ticket(payload)
-    tickets = db.list_tickets()
+    recent = db.list_tickets(limit=RECENT_LIMIT)
     return templates.TemplateResponse(
-        request, "_tickets_table.html", {"tickets": tickets}
+        request,
+        "_recent_list.html",
+        {"recent": recent},
+        headers={"HX-Trigger": "ticketCreated"},
     )

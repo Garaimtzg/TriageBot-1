@@ -107,14 +107,13 @@ def get_ticket(ticket_id: int) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
-def list_tickets(
-    *,
-    category: str | None = None,
-    priority: str | None = None,
-    status: str | None = None,
-) -> list[dict]:
-    """Return tickets (newest first) optionally filtered by category/priority/status."""
-    init_db()
+def _filter_sql(
+    category: str | None,
+    priority: str | None,
+    status: str | None,
+    search: str | None,
+) -> tuple[list[str], list[str]]:
+    """Build the shared WHERE clauses/params used by list_tickets and count_tickets."""
     clauses: list[str] = []
     params: list[str] = []
     if category:
@@ -126,15 +125,59 @@ def list_tickets(
     if status:
         clauses.append("status = ?")
         params.append(status)
+    if search:
+        # Case-insensitive substring match on the title.
+        clauses.append("LOWER(title) LIKE ?")
+        params.append(f"%{search.lower()}%")
+    return clauses, params
+
+
+def list_tickets(
+    *,
+    category: str | None = None,
+    priority: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[dict]:
+    """Return tickets (newest first), optionally filtered, searched and paginated.
+
+    ``search`` matches a case-insensitive substring of the title. When ``limit``
+    is given the result is paginated (``offset`` rows are skipped first); with no
+    ``limit`` every matching ticket is returned (backwards-compatible default).
+    """
+    init_db()
+    clauses, params = _filter_sql(category, priority, status, search)
 
     query = "SELECT * FROM tickets"
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
     query += " ORDER BY id DESC"
+    if limit is not None:
+        query += " LIMIT ? OFFSET ?"
+        params = [*params, limit, offset]
 
     with _connect() as conn:
         rows = conn.execute(query, params).fetchall()
     return [_row_to_dict(row) for row in rows]
+
+
+def count_tickets(
+    *,
+    category: str | None = None,
+    priority: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+) -> int:
+    """Count tickets matching the same filters as :func:`list_tickets` (for pagination)."""
+    init_db()
+    clauses, params = _filter_sql(category, priority, status, search)
+    query = "SELECT COUNT(*) AS n FROM tickets"
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    with _connect() as conn:
+        return int(conn.execute(query, params).fetchone()["n"])
 
 
 def update_ticket(ticket_id: int, fields: dict) -> dict | None:
