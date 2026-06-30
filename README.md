@@ -8,13 +8,17 @@ Durante el bootcamp construiréis una aplicación web interna para clasificar ti
 
 TriageBot permite:
 
-- Crear tickets con `title` y `description`.
+- Registrar usuarios e iniciar sesión (email + contraseña). **Toda la app
+  requiere sesión**: lo primero es crear una cuenta o iniciar sesión.
+- Crear tickets con `title` y `description`, **asignando uno o varios
+  responsables** (usuarios registrados; mínimo uno desde el formulario).
 - Clasificarlos automáticamente con un LLM (gpt-oss-120b vía OpenRouter) en:
   - `category`: `bug`, `feature_request`, `question`, `urgent`
   - `priority`: `P1`, `P2`, `P3`
   - `tags`: lista de etiquetas cortas.
 - Persistirlos en SQLite.
-- Verlos en un tablero web con filtros.
+- Verlos en un tablero web con filtros, incluyendo la columna de responsables, y
+  reasignar responsables desde el detalle del ticket.
 - Ejecutar tests automáticos y CI en GitHub Actions.
 
 ## Stack obligatorio
@@ -42,11 +46,17 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edita `.env` y añade tu API key:
+Edita `.env` y añade tu API key y el secreto de sesión:
 
 ```bash
 OPENROUTER_API_KEY=sk-or-...
+# Secreto para firmar las cookies de sesión (login). Genera uno aleatorio:
+#   python -c "import secrets; print(secrets.token_hex(32))"
+SESSION_SECRET=...
 ```
+
+> Si no defines `SESSION_SECRET` la app arranca con un valor de desarrollo por
+> defecto (suficiente para tests/local, **no** para producción).
 
 Comprueba que `.env` está ignorado por Git:
 
@@ -62,7 +72,8 @@ Todos los parámetros ajustables viven en [`config.yaml`](config.yaml) — **no 
 valores hardcodeados en el código** (ni siquiera el *prompt* del clasificador):
 
 - `ticket`: catálogo de `categories`, `priorities`, `statuses` y `default_status`.
-- `validation`: longitudes máximas de `title` y `description`.
+- `validation`: longitudes máximas de `title`/`description` y reglas de los
+  usuarios (`name_max_len`, `email_max_len`, `password_min_len`, `password_max_len`).
 - `database`: nombre de la env var de la URL (`url_env`) y `default_url`.
 - `classifier`: `model`, `base_url`, `max_tokens`, `system_prompt`, valor de
   `fallback` y la heurística por palabras clave. `api_key_env` indica el

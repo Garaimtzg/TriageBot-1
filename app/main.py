@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
-from app import classifier, db
+from app import auth, classifier, db
 from app.models import (
     ALLOWED_CATEGORIES,
     ALLOWED_PRIORITIES,
     ALLOWED_STATUSES,
     TicketCreate,
     TicketUpdate,
+    UserCreate,
+    UserLogin,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,7 +35,30 @@ logger = logging.getLogger("triagebot.main")
 
 app = FastAPI(title="TriageBot")
 
+# Cookie-based sessions for login. SESSION_SECRET comes from the environment;
+# a development fallback keeps tests/local runs working without extra setup
+# (set a real secret in production via .env).
+SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-insecure-session-secret-change-me")
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax")
+
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+class NotAuthenticated(Exception):
+    """Raised by HTML routes when there is no logged-in user."""
+
+
+@app.exception_handler(NotAuthenticated)
+async def _redirect_to_login(request: Request, exc: NotAuthenticated) -> RedirectResponse:
+    return RedirectResponse("/login", status_code=303)
+
+
+def require_user(request: Request) -> dict:
+    """Dependency for HTML routes: return the current user or redirect to /login."""
+    user = auth.get_current_user(request)
+    if user is None:
+        raise NotAuthenticated()
+    return user
 
 
 @app.get("/health")
@@ -68,7 +95,11 @@ def _create_ticket(payload: TicketCreate) -> dict:
         category=classification["category"],
         priority=classification["priority"],
         tags=classification["tags"],
+        assignee_ids=payload.assignee_ids,
     )
+
+
+# --- JSON API (unauthenticated programmatic contract) ----------------------
 
 
 @app.post("/tickets", status_code=201)
@@ -91,6 +122,95 @@ def update_ticket(ticket_id: int, payload: TicketUpdate) -> dict:
     if db.get_ticket(ticket_id) is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
     return db.update_ticket(ticket_id, payload.model_dump(exclude_unset=True))
+
+
+# --- Auth (login / register / logout) --------------------------------------
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request) -> HTMLResponse:
+    if auth.get_current_user(request) is not None:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "login.html", {"active": "login"})
+
+
+@app.post("/login", response_model=None)
+def login_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+) -> HTMLResponse | RedirectResponse:
+    creds = UserLogin(email=email, password=password)
+    user = auth.authenticate(creds.email, creds.password)
+    if user is None:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"active": "login", "error": "Email o contraseña incorrectos.", "email": email},
+            status_code=401,
+        )
+    auth.login_session(request, user["id"])
+    return RedirectResponse("/", status_code=303)
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request) -> HTMLResponse:
+    if auth.get_current_user(request) is not None:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "register.html", {"active": "register"})
+
+
+@app.post("/register", response_model=None)
+def register_submit(
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+) -> HTMLResponse | RedirectResponse:
+    try:
+        payload = UserCreate(name=name, email=email, password=password)
+    except ValueError:
+        return templates.TemplateResponse(
+            request,
+            "register.html",
+            {
+                "active": "register",
+                "error": (
+                    "Revisa los datos: nombre, email válido y "
+                    "contraseña de al menos 8 caracteres."
+                ),
+                "name": name,
+                "email": email,
+            },
+            status_code=422,
+        )
+
+    if db.get_user_by_email(payload.email) is not None:
+        return templates.TemplateResponse(
+            request,
+            "register.html",
+            {
+                "active": "register",
+                "error": "Ya existe un usuario con ese email.",
+                "name": name,
+                "email": email,
+            },
+            status_code=409,
+        )
+
+    user = db.create_user(
+        name=payload.name,
+        email=payload.email,
+        password_hash=auth.hash_password(payload.password),
+    )
+    auth.login_session(request, user["id"])
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/logout")
+def logout(request: Request) -> RedirectResponse:
+    auth.logout_session(request)
+    return RedirectResponse("/login", status_code=303)
 
 
 # --- Frontend (HTMX + Jinja2) ---------------------------------------------
@@ -148,19 +268,20 @@ def _board_context(
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
+def index(request: Request, user: dict = Depends(require_user)) -> HTMLResponse:
     """Page 1: create a ticket and see it appear in the recent list."""
     recent = db.list_tickets(limit=RECENT_LIMIT)
     return templates.TemplateResponse(
         request,
         "create.html",
-        {"recent": recent, "active": "create"},
+        {"recent": recent, "users": db.list_users(), "current_user": user, "active": "create"},
     )
 
 
 @app.get("/board", response_class=HTMLResponse)
 def board(
     request: Request,
+    user: dict = Depends(require_user),
     category: str | None = None,
     priority: str | None = None,
     status: str | None = None,
@@ -174,13 +295,14 @@ def board(
     return templates.TemplateResponse(
         request,
         "board.html",
-        {**context, **_filter_options(), "active": "board"},
+        {**context, **_filter_options(), "current_user": user, "active": "board"},
     )
 
 
 @app.get("/ui/tickets", response_class=HTMLResponse)
 def ui_tickets_table(
     request: Request,
+    user: dict = Depends(require_user),
     category: str | None = None,
     priority: str | None = None,
     status: str | None = None,
@@ -195,28 +317,35 @@ def ui_tickets_table(
 
 
 @app.get("/ui/tickets/{ticket_id}", response_class=HTMLResponse)
-def ui_ticket_detail(request: Request, ticket_id: int) -> HTMLResponse:
+def ui_ticket_detail(
+    request: Request, ticket_id: int, user: dict = Depends(require_user)
+) -> HTMLResponse:
     """Modal fragment with the full ticket detail (all fields)."""
     ticket = db.get_ticket(ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
     return templates.TemplateResponse(
-        request, "_ticket_detail.html", {"ticket": ticket}
+        request, "_ticket_detail.html", {"ticket": ticket, "users": db.list_users()}
     )
 
 
 @app.post("/ui/tickets", response_class=HTMLResponse)
 def ui_create_ticket(
     request: Request,
+    user: dict = Depends(require_user),
     title: str = Form(...),
     description: str = Form(...),
+    assignee_ids: list[int] = Form(default=[]),
 ) -> HTMLResponse:
     """Create a ticket from the form and return the refreshed recent-tickets list.
 
+    The UI requires at least one responsible (assignee); requesting zero is a 422.
     Sets the ``ticketCreated`` HX-Trigger so the page can show a success popup.
     """
+    if not assignee_ids:
+        raise HTTPException(status_code=422, detail="Debes asignar al menos un responsable")
     try:
-        payload = TicketCreate(title=title, description=description)
+        payload = TicketCreate(title=title, description=description, assignee_ids=assignee_ids)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _create_ticket(payload)
@@ -226,4 +355,25 @@ def ui_create_ticket(
         "_recent_list.html",
         {"recent": recent},
         headers={"HX-Trigger": "ticketCreated"},
+    )
+
+
+@app.post("/ui/tickets/{ticket_id}/assignees", response_class=HTMLResponse)
+def ui_update_assignees(
+    request: Request,
+    ticket_id: int,
+    user: dict = Depends(require_user),
+    assignee_ids: list[int] = Form(default=[]),
+) -> HTMLResponse:
+    """Reassign the responsibles of an existing ticket (from the detail modal)."""
+    if db.get_ticket(ticket_id) is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if not assignee_ids:
+        raise HTTPException(status_code=422, detail="Debes asignar al menos un responsable")
+    ticket = db.update_ticket(ticket_id, {"assignee_ids": assignee_ids})
+    return templates.TemplateResponse(
+        request,
+        "_ticket_detail.html",
+        {"ticket": ticket, "users": db.list_users()},
+        headers={"HX-Trigger": "ticketUpdated"},
     )

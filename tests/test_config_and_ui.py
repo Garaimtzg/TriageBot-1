@@ -12,16 +12,23 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app import classifier, models
+from app import classifier, db, models
 from app.config import get_config
 from app.main import app
 
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    """TestClient con una base de datos aislada por test."""
+    """TestClient con una base de datos aislada por test y sesión iniciada."""
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
-    return TestClient(app)
+    c = TestClient(app)
+    resp = c.post(
+        "/register",
+        data={"name": "Tester", "email": "tester@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    return c
 
 
 def test_htmx_ui_create_and_filter(client, monkeypatch):
@@ -30,6 +37,7 @@ def test_htmx_ui_create_and_filter(client, monkeypatch):
         "app.classifier.classify_ticket",
         lambda title, description: {"category": "bug", "priority": "P2", "tags": ["login"]},
     )
+    uid = db.list_users()[0]["id"]
 
     # GET / devuelve la página con el formulario.
     home = client.get("/")
@@ -40,7 +48,11 @@ def test_htmx_ui_create_and_filter(client, monkeypatch):
     # POST del formulario crea el ticket y devuelve el fragmento de tabla con él.
     created = client.post(
         "/ui/tickets",
-        data={"title": "La app no carga", "description": "Pantalla en blanco al entrar"},
+        data={
+            "title": "La app no carga",
+            "description": "Pantalla en blanco al entrar",
+            "assignee_ids": [uid],
+        },
     )
     assert created.status_code == 200
     assert "La app no carga" in created.text
@@ -56,8 +68,20 @@ def test_htmx_ui_create_and_filter(client, monkeypatch):
     assert "La app no carga" in match.text
 
     # Input inválido desde el formulario devuelve 422 (no se cae).
-    invalid = client.post("/ui/tickets", data={"title": "   ", "description": "x"})
+    invalid = client.post(
+        "/ui/tickets",
+        data={"title": "   ", "description": "x", "assignee_ids": [uid]},
+    )
     assert invalid.status_code == 422
+
+
+def test_ui_requires_login(tmp_path, monkeypatch):
+    """Sin sesión, las páginas de la app redirigen al login."""
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'noauth.db'}")
+    anon = TestClient(app)
+    resp = anon.get("/", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
 
 
 def test_config_path_override_is_honored(tmp_path, monkeypatch):

@@ -17,7 +17,8 @@
       hx-swap="innerHTML"
       hx-indicator="#thinking"
       hx-disabled-elt="find button[type='submit']"
-      hx-on::after-request="if(event.detail.successful) this.reset()"
+      hx-on::before-request="if(!this.querySelector('input[name=assignee_ids]:checked')){event.preventDefault(); document.getElementById('assignee-error').classList.remove('hidden');}"
+      hx-on::after-request="if(event.detail.successful){this.reset(); document.getElementById('assignee-error').classList.add('hidden');}"
     >
       <label class="block">
         <span class="text-sm font-semibold text-navy-700">Título</span>
@@ -31,6 +32,26 @@
                   class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm shadow-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
                   placeholder="Desde esta mañana aparece una pantalla en blanco al iniciar sesión…"></textarea>
       </label>
+
+      <fieldset>
+        <legend class="text-sm font-semibold text-navy-700">Responsables <span class="text-navy-400">(al menos uno)</span></legend>
+        <div class="mt-2 grid max-h-44 grid-cols-1 gap-1.5 overflow-y-auto rounded-lg border border-navy-200 p-2 sm:grid-cols-2">
+          {% for u in users %}
+          <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition hover:bg-navy-50">
+            <input type="checkbox" name="assignee_ids" value="{{ u.id }}"
+                   class="h-4 w-4 rounded border-navy-300 text-navy-700 focus:ring-navy-300">
+            <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy-600 text-xs font-bold text-white">{{ u.name[0]|upper }}</span>
+            <span class="truncate text-navy-800">{{ u.name }}</span>
+          </label>
+          {% else %}
+          <p class="px-2 py-1 text-sm text-navy-400">No hay usuarios registrados.</p>
+          {% endfor %}
+        </div>
+        <p id="assignee-error" class="mt-1.5 hidden text-xs font-medium text-red-600">
+          Selecciona al menos un responsable.
+        </p>
+      </fieldset>
+
       <div class="flex justify-end">
         <button type="submit"
                 class="inline-flex items-center gap-2 rounded-lg bg-navy-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-60">
