@@ -27,6 +27,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # so an explicit `export` still wins over the .env file.
 load_dotenv(BASE_DIR / ".env")
 
+logger = logging.getLogger("triagebot.main")
+
 app = FastAPI(title="TriageBot")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
