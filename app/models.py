@@ -6,12 +6,18 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
-ALLOWED_CATEGORIES = {"bug", "feature_request", "question", "urgent"}
-ALLOWED_PRIORITIES = {"P1", "P2", "P3"}
-ALLOWED_STATUSES = {"open", "in_progress", "closed"}
+from app.config import get_config
 
-TITLE_MAX_LEN = 200
-DESCRIPTION_MAX_LEN = 5000
+_cfg = get_config()
+_ticket_cfg = _cfg["ticket"]
+_validation_cfg = _cfg["validation"]
+
+ALLOWED_CATEGORIES = set(_ticket_cfg["categories"])
+ALLOWED_PRIORITIES = set(_ticket_cfg["priorities"])
+ALLOWED_STATUSES = set(_ticket_cfg["statuses"])
+
+TITLE_MAX_LEN = int(_validation_cfg["title_max_len"])
+DESCRIPTION_MAX_LEN = int(_validation_cfg["description_max_len"])
 
 
 class TicketCreate(BaseModel):

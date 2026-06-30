@@ -1,0 +1,167 @@
+# Configuración de TriageBot.
+#
+# Aquí vive TODO lo que antes estaba hardcodeado en el código: modelo, prompt,
+# parámetros del clasificador, valores de fallback, límites de validación y
+# catálogo de categorías/prioridades/estados.
+#
+# IMPORTANTE: este fichero NO contiene secretos. La API key nunca se escribe
+# aquí; sólo se indica el NOMBRE de la variable de entorno de la que leerla
+# (classifier.api_key_env). La ruta de este fichero puede sobreescribirse con
+# la variable de entorno CONFIG_PATH.
+
+ticket:
+  categories: [bug, feature_request, question, urgent]
+  priorities: [P1, P2, P3]
+  statuses: [open, in_progress, closed]
+  default_status: open
+
+validation:
+  title_max_len: 200
+  description_max_len: 5000
+
+database:
+  # Si la variable de entorno indicada existe, tiene prioridad sobre default_url.
+  url_env: DATABASE_URL
+  default_url: "sqlite:///triagebot.db"
+
+classifier:
+  # Nombre de la variable de entorno con la API key (el valor jamás vive aquí).
+  api_key_env: OPENROUTER_API_KEY
+  model: "openai/gpt-oss-120b"
+  base_url: "https://openrouter.ai/api/v1"
+  max_tokens: 256
+
+  # Valor por defecto de último recurso si todo lo demás falla.
+  fallback:
+    category: question
+    priority: P3
+    tags: []
+
+  system_prompt: |-
+    Eres un clasificador de tickets de soporte. Respondes SIEMPRE con un único objeto JSON, sin texto adicional, con esta forma exacta:
+    {"category": <"bug"|"feature_request"|"question"|"urgent">, "priority": <"P1"|"P2"|"P3">, "tags": [<strings cortos>]}
+    P1 es la prioridad más alta. Devuelve una lista corta de tags útiles (puede estar vacía).
+
+  # Heurística por palabras clave usada cuando el LLM no está disponible.
+  heuristic:
+    max_tags: 3
+    default:
+      category: question
+      priority: P3
+
+    # Reglas evaluadas EN ORDEN; la primera cuyos keywords aparezcan en el texto
+    # (normalizado: minúsculas y sin acentos) gana. Esto da la precedencia
+    # urgent > bug > feature_request > question.
+    rules:
+      - category: urgent
+        priority: P1
+        keywords:
+          - "urge"
+          - "urgent"
+          - "critic"
+          - "caido"
+          - "caida"
+          - "se cae"
+          - "no funciona"
+          - "no carga"
+          - "no puedo trabajar"
+          - "no podemos trabajar"
+          - "bloquea"
+          - "bloqueado"
+          - "bloqueante"
+          - "parado"
+          - "parados"
+          - "produccion"
+          - "demo"
+          - "cuanto antes"
+          - "lo antes posible"
+          - "inmediat"
+          - "perdida de datos"
+          - "fuga de datos"
+          - "brecha"
+          - "todos los usuarios"
+      - category: bug
+        priority: P2
+        keywords:
+          - "error"
+          - "fallo"
+          - "falla"
+          - "fallando"
+          - "bug"
+          - "roto"
+          - "rota"
+          - "no muestra"
+          - "no aparece"
+          - "no guarda"
+          - "no se guarda"
+          - "no deja"
+          - "incorrect"
+          - "mal calculad"
+          - "se cierra"
+          - "se congela"
+          - "pantalla en blanco"
+          - "excepcion"
+          - "500"
+          - "no responde"
+          - "duplicad"
+      - category: feature_request
+        priority: P3
+        keywords:
+          - "añadir"
+          - "agregar"
+          - "permitir"
+          - "poder "
+          - "poder\n"
+          - "me vendria bien"
+          - "nos vendria bien"
+          - "seria util"
+          - "estaria bien"
+          - "estaria genial"
+          - "podriais"
+          - "se podria"
+          - "necesitamos poder"
+          - "personalizar"
+          - "exportar"
+          - "filtro por"
+          - "filtrar por"
+          - "soporte para"
+          - "integrar"
+          - "integracion"
+          - "mejorar"
+          - "sugerencia"
+          - "propuesta"
+      - category: question
+        priority: P3
+        keywords:
+          - "como "
+          - "como se"
+          - "donde "
+          - "cuando "
+          - "que politica"
+          - "se puede"
+          - "puedo "
+          - "es posible"
+          - "duda"
+          - "consulta"
+          - "no se si"
+          - "necesito saber"
+          - "quisiera saber"
+          - "?"
+
+    # Tags descriptivos derivados del texto (orden = prioridad al elegir).
+    tag_keywords:
+      pdf: pdf
+      exportar: export
+      login: login
+      sesion: login
+      contrasena: password
+      password: password
+      permiso: permissions
+      acceso: access
+      filtro: filtros
+      movil: movil
+      correo: email
+      email: email
+      informe: informes
+      factura: facturacion
+      pago: pagos
