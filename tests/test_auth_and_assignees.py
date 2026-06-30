@@ -141,6 +141,50 @@ def test_reassign_assignees_endpoint(anon):
     assert empty.status_code == 422
 
 
+def test_create_returns_confirmation_card_not_a_list(anon):
+    _register(anon, name="Ada", email="ada@example.com")
+    ada = db.list_users()[0]["id"]
+    resp = anon.post(
+        "/ui/tickets",
+        data={"title": "Pantalla en blanco", "description": "x", "assignee_ids": [ada]},
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("HX-Trigger") == "ticketCreated"
+    # La confirmación muestra el ticket creado y enlaza al tablero.
+    assert "creado" in resp.text
+    assert "Pantalla en blanco" in resp.text
+    assert "/board" in resp.text
+
+
+def test_board_defaults_to_my_tickets_with_toggle_for_all(anon):
+    # Ada se registra y crea un ticket asignado SOLO a Linus.
+    _register(anon, name="Ada", email="ada@example.com")
+    anon.post("/logout", follow_redirects=False)
+    _register(anon, name="Linus", email="linus@example.com")
+    linus = db.get_user_by_email("linus@example.com")["id"]
+    anon.post("/logout", follow_redirects=False)
+
+    # Sesión de Ada: crea un ticket cuyo único responsable es Linus.
+    anon.post(
+        "/login",
+        data={"email": "ada@example.com", "password": "secret123"},
+        follow_redirects=False,
+    )
+    anon.post(
+        "/ui/tickets",
+        data={"title": "Para Linus", "description": "x", "assignee_ids": [linus]},
+    )
+
+    # Por defecto (scope=mine) Ada no ve el ticket: no es responsable.
+    mine = anon.get("/ui/tickets")
+    assert "Para Linus" not in mine.text
+    assert "No hay tickets" in mine.text
+
+    # Con el botón "Todos" (scope=all) sí lo ve.
+    all_tickets = anon.get("/ui/tickets", params={"scope": "all"})
+    assert "Para Linus" in all_tickets.text
+
+
 def test_assignees_ignore_unknown_user_ids(anon):
     _register(anon, name="Ada", email="ada@example.com")
     ada = db.list_users()[0]["id"]

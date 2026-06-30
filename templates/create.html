@@ -2,18 +2,19 @@
 {% block title %} · Nuevo ticket{% endblock %}
 
 {% block content %}
-<div class="grid gap-6 lg:grid-cols-3 lg:gap-8 xl:grid-cols-5">
-  <!-- Create form -->
-  <section class="lg:col-span-2 xl:col-span-3">
+<div class="mx-auto w-full max-w-3xl">
+  <section>
     <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">Registrar ticket</h1>
     <p class="mt-1 text-sm text-navy-500">
-      Escribe el título y la descripción. La IA lo clasificará automáticamente.
+      Escribe el título y la descripción y elige a sus responsables. La IA lo
+      clasificará automáticamente. Los tickets se consultan en la pestaña
+      <a href="/board" class="font-medium text-navy-600 hover:text-navy-800">Tablero</a>.
     </p>
 
     <form
       class="mt-6 space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-navy-100"
       hx-post="/ui/tickets"
-      hx-target="#recent-list"
+      hx-target="#create-status"
       hx-swap="innerHTML"
       hx-indicator="#thinking"
       hx-disabled-elt="find button[type='submit']"
@@ -34,14 +35,15 @@
       </label>
 
       <fieldset>
-        <legend class="text-sm font-semibold text-navy-700">Responsables <span class="text-navy-400">(al menos uno)</span></legend>
-        <div class="mt-2 grid max-h-44 grid-cols-1 gap-1.5 overflow-y-auto rounded-lg border border-navy-200 p-2 sm:grid-cols-2">
+        <legend class="text-sm font-semibold text-navy-700">Responsables <span class="text-navy-400">(selecciona al menos uno)</span></legend>
+        <div class="mt-2 grid max-h-64 grid-cols-1 gap-1.5 overflow-y-auto rounded-lg border border-navy-200 p-2 sm:grid-cols-2">
           {% for u in users %}
           <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition hover:bg-navy-50">
             <input type="checkbox" name="assignee_ids" value="{{ u.id }}"
                    class="h-4 w-4 rounded border-navy-300 text-navy-700 focus:ring-navy-300">
             <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy-600 text-xs font-bold text-white">{{ u.name[0]|upper }}</span>
             <span class="truncate text-navy-800">{{ u.name }}</span>
+            <span class="ml-auto truncate text-xs text-navy-400">{{ u.email }}</span>
           </label>
           {% else %}
           <p class="px-2 py-1 text-sm text-navy-400">No hay usuarios registrados.</p>
@@ -59,19 +61,9 @@
         </button>
       </div>
     </form>
-  </section>
 
-  <!-- Recent tickets -->
-  <section class="lg:col-span-1 xl:col-span-2">
-    <div class="lg:sticky lg:top-8">
-    <h2 class="text-sm font-semibold uppercase tracking-wide text-navy-500">Últimos tickets</h2>
-    <div id="recent-list" class="mt-3">
-      {% include "_recent_list.html" %}
-    </div>
-    <a href="/board" class="mt-4 inline-block text-sm font-medium text-navy-600 hover:text-navy-800">
-      Ver tablero completo →
-    </a>
-    </div>
+    <!-- Confirmación del último ticket creado (los tickets se ven en el Tablero). -->
+    <div id="create-status" class="mt-4"></div>
   </section>
 </div>
 

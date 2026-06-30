@@ -230,10 +230,11 @@ def _filter_sql(
     priority: str | None,
     status: str | None,
     search: str | None,
-) -> tuple[list[str], list[str]]:
+    assignee_id: int | None,
+) -> tuple[list[str], list]:
     """Build the shared WHERE clauses/params used by list_tickets and count_tickets."""
     clauses: list[str] = []
-    params: list[str] = []
+    params: list = []
     if category:
         clauses.append("category = ?")
         params.append(category)
@@ -247,6 +248,10 @@ def _filter_sql(
         # Case-insensitive substring match on the title.
         clauses.append("LOWER(title) LIKE ?")
         params.append(f"%{search.lower()}%")
+    if assignee_id is not None:
+        # Only tickets where the given user is one of the assignees.
+        clauses.append("id IN (SELECT ticket_id FROM ticket_assignees WHERE user_id = ?)")
+        params.append(assignee_id)
     return clauses, params
 
 
@@ -256,17 +261,19 @@ def list_tickets(
     priority: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    assignee_id: int | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[dict]:
     """Return tickets (newest first), optionally filtered, searched and paginated.
 
-    ``search`` matches a case-insensitive substring of the title. When ``limit``
-    is given the result is paginated (``offset`` rows are skipped first); with no
-    ``limit`` every matching ticket is returned (backwards-compatible default).
+    ``search`` matches a case-insensitive substring of the title. ``assignee_id``
+    restricts the result to tickets assigned to that user. When ``limit`` is given
+    the result is paginated (``offset`` rows are skipped first); with no ``limit``
+    every matching ticket is returned (backwards-compatible default).
     """
     init_db()
-    clauses, params = _filter_sql(category, priority, status, search)
+    clauses, params = _filter_sql(category, priority, status, search, assignee_id)
 
     query = "SELECT * FROM tickets"
     if clauses:
@@ -287,10 +294,11 @@ def count_tickets(
     priority: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    assignee_id: int | None = None,
 ) -> int:
     """Count tickets matching the same filters as :func:`list_tickets` (for pagination)."""
     init_db()
-    clauses, params = _filter_sql(category, priority, status, search)
+    clauses, params = _filter_sql(category, priority, status, search, assignee_id)
     query = "SELECT COUNT(*) AS n FROM tickets"
     if clauses:
         query += " WHERE " + " AND ".join(clauses)

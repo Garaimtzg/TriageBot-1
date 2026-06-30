@@ -216,7 +216,6 @@ def logout(request: Request) -> RedirectResponse:
 # --- Frontend (HTMX + Jinja2) ---------------------------------------------
 
 PAGE_SIZE = 10
-RECENT_LIMIT = 6
 
 
 def _filter_options() -> dict:
@@ -234,6 +233,8 @@ def _board_context(
     status: str | None,
     q: str | None,
     page: int,
+    assignee_id: int | None,
+    scope: str,
 ) -> dict:
     """Shared context for the paginated board table fragment + page links."""
     category = category or None
@@ -242,7 +243,8 @@ def _board_context(
     search = (q or "").strip() or None
 
     total = db.count_tickets(
-        category=category, priority=priority, status=status, search=search
+        category=category, priority=priority, status=status, search=search,
+        assignee_id=assignee_id,
     )
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     page = max(1, min(page, total_pages))
@@ -251,6 +253,7 @@ def _board_context(
         priority=priority,
         status=status,
         search=search,
+        assignee_id=assignee_id,
         limit=PAGE_SIZE,
         offset=(page - 1) * PAGE_SIZE,
     )
@@ -264,17 +267,22 @@ def _board_context(
         "f_priority": priority or "",
         "f_status": status or "",
         "f_q": search or "",
+        "scope": scope,
     }
+
+
+def _scope_assignee_id(scope: str, user: dict) -> int | None:
+    """Resolve the assignee filter: ``mine`` → current user, ``all`` → no filter."""
+    return None if scope == "all" else user["id"]
 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, user: dict = Depends(require_user)) -> HTMLResponse:
-    """Page 1: create a ticket and see it appear in the recent list."""
-    recent = db.list_tickets(limit=RECENT_LIMIT)
+    """Page 1: create a ticket choosing its responsibles."""
     return templates.TemplateResponse(
         request,
         "create.html",
-        {"recent": recent, "users": db.list_users(), "current_user": user, "active": "create"},
+        {"users": db.list_users(), "current_user": user, "active": "create"},
     )
 
 
@@ -287,10 +295,16 @@ def board(
     status: str | None = None,
     q: str | None = None,
     page: int = 1,
+    scope: str = "mine",
 ) -> HTMLResponse:
-    """Page 2: paginated, filterable, searchable board."""
+    """Page 2: paginated, filterable, searchable board.
+
+    By default (``scope=mine``) only the current user's tickets are shown; the
+    UI offers a toggle to ``scope=all`` to see everyone's tickets.
+    """
     context = _board_context(
-        category=category, priority=priority, status=status, q=q, page=page
+        category=category, priority=priority, status=status, q=q, page=page,
+        assignee_id=_scope_assignee_id(scope, user), scope=scope,
     )
     return templates.TemplateResponse(
         request,
@@ -308,10 +322,12 @@ def ui_tickets_table(
     status: str | None = None,
     q: str | None = None,
     page: int = 1,
+    scope: str = "mine",
 ) -> HTMLResponse:
     """HTML fragment with the paginated board table (HTMX live filter/search/paging)."""
     context = _board_context(
-        category=category, priority=priority, status=status, q=q, page=page
+        category=category, priority=priority, status=status, q=q, page=page,
+        assignee_id=_scope_assignee_id(scope, user), scope=scope,
     )
     return templates.TemplateResponse(request, "_board_table.html", context)
 
@@ -337,10 +353,11 @@ def ui_create_ticket(
     description: str = Form(...),
     assignee_ids: list[int] = Form(default=[]),
 ) -> HTMLResponse:
-    """Create a ticket from the form and return the refreshed recent-tickets list.
+    """Create a ticket from the form and return a confirmation card.
 
     The UI requires at least one responsible (assignee); requesting zero is a 422.
-    Sets the ``ticketCreated`` HX-Trigger so the page can show a success popup.
+    Tickets themselves are listed on the board tab, not here. Sets the
+    ``ticketCreated`` HX-Trigger so the page can show a success popup.
     """
     if not assignee_ids:
         raise HTTPException(status_code=422, detail="Debes asignar al menos un responsable")
@@ -348,12 +365,11 @@ def ui_create_ticket(
         payload = TicketCreate(title=title, description=description, assignee_ids=assignee_ids)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _create_ticket(payload)
-    recent = db.list_tickets(limit=RECENT_LIMIT)
+    ticket = _create_ticket(payload)
     return templates.TemplateResponse(
         request,
-        "_recent_list.html",
-        {"recent": recent},
+        "_create_status.html",
+        {"ticket": ticket},
         headers={"HX-Trigger": "ticketCreated"},
     )
 

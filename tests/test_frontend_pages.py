@@ -64,7 +64,7 @@ def test_create_page_and_board_page_render(client):
     assert 'hx-get="/ui/tickets"' in board.text  # filtros/búsqueda
 
 
-def test_create_returns_recent_list_with_popup_trigger(client, assignee_id):
+def test_create_returns_confirmation_with_popup_trigger(client, assignee_id):
     resp = client.post(
         "/ui/tickets",
         data={
@@ -74,7 +74,7 @@ def test_create_returns_recent_list_with_popup_trigger(client, assignee_id):
         },
     )
     assert resp.status_code == 200
-    # El nuevo ticket aparece en el listado reciente...
+    # La confirmación muestra el ticket creado...
     assert "La app no carga" in resp.text
     # ...y se dispara el evento para el popup de éxito.
     assert resp.headers.get("HX-Trigger") == "ticketCreated"
