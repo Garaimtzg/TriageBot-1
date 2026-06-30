@@ -7,6 +7,7 @@ output-validation logic, and stub the OpenAI client for the happy path.
 from __future__ import annotations
 
 import json
+import logging
 
 from app.classifier import (
     FALLBACK_CLASSIFICATION,
@@ -144,3 +145,45 @@ def test_classify_ticket_falls_back_to_heuristic_on_sdk_error(monkeypatch):
     # And neutral text still degrades gracefully to the safe default.
     neutral = classify_ticket("Asunto", "Texto neutro")
     assert neutral == FALLBACK_CLASSIFICATION
+
+
+def test_logs_notice_without_model(monkeypatch, caplog):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    with caplog.at_level(logging.INFO, logger="triagebot.classifier"):
+        classify_ticket("Asunto", "Texto neutro")
+
+    messages = " ".join(record.message for record in caplog.records).lower()
+    assert "sin modelo" in messages
+
+
+def test_logs_notice_with_model(monkeypatch, caplog):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    class _Message:
+        content = json.dumps({"category": "bug", "priority": "P2", "tags": []})
+
+    class _Choice:
+        message = _Message()
+
+    class _Completion:
+        choices = [_Choice()]
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            self.chat = self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, *args, **kwargs):
+            return _Completion()
+
+    monkeypatch.setattr("openai.OpenAI", _FakeClient)
+
+    with caplog.at_level(logging.INFO, logger="triagebot.classifier"):
+        classify_ticket("La app falla", "Da un error al guardar")
+
+    messages = " ".join(record.message for record in caplog.records).lower()
+    assert "con modelo" in messages
