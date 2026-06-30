@@ -149,20 +149,21 @@ classifier:
           - "quisiera saber"
           - "?"
 
-    # Tags descriptivos derivados del texto (orden = prioridad al elegir).
+    # Tags descriptivos derivados del texto (clave = palabra a buscar en el
+    # texto normalizado; valor = tag emitido, SIEMPRE en castellano).
     tag_keywords:
       pdf: pdf
-      exportar: export
-      login: login
-      sesion: login
-      contrasena: password
-      password: password
-      permiso: permissions
-      acceso: access
+      exportar: exportar
+      login: inicio-sesion
+      sesion: inicio-sesion
+      contrasena: contrasena
+      password: contrasena
+      permiso: permisos
+      acceso: acceso
       filtro: filtros
       movil: movil
-      correo: email
-      email: email
+      correo: correo
+      email: correo
       informe: informes
       factura: facturacion
       pago: pagos
