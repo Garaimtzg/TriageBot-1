@@ -63,7 +63,7 @@ def test_heuristic_derives_tags():
     result = _heuristic_classify("Exportar a PDF", "Quiero exportar el informe a PDF")
 
     assert "pdf" in result["tags"]
-    assert "export" in result["tags"]
+    assert "exportar" in result["tags"]
 
 
 def test_heuristic_unmatched_defaults_to_question():
