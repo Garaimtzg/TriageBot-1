@@ -113,8 +113,11 @@ def list_tickets(
     category: str | None = None,
     priority: str | None = None,
     status: str | None = None,
+    overdue: bool = False,
 ) -> list[dict]:
-    return db.list_tickets(category=category, priority=priority, status=status)
+    return db.list_tickets(
+        category=category, priority=priority, status=status, overdue=overdue
+    )
 
 
 @app.patch("/tickets/{ticket_id}")
@@ -233,6 +236,7 @@ def _board_context(
     priority: str | None,
     status: str | None,
     q: str | None,
+    overdue: bool,
     page: int,
 ) -> dict:
     """Shared context for the paginated board table fragment + page links."""
@@ -242,7 +246,7 @@ def _board_context(
     search = (q or "").strip() or None
 
     total = db.count_tickets(
-        category=category, priority=priority, status=status, search=search
+        category=category, priority=priority, status=status, search=search, overdue=overdue
     )
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     page = max(1, min(page, total_pages))
@@ -251,6 +255,7 @@ def _board_context(
         priority=priority,
         status=status,
         search=search,
+        overdue=overdue,
         limit=PAGE_SIZE,
         offset=(page - 1) * PAGE_SIZE,
     )
@@ -264,6 +269,7 @@ def _board_context(
         "f_priority": priority or "",
         "f_status": status or "",
         "f_q": search or "",
+        "f_overdue": overdue,
     }
 
 
@@ -286,11 +292,12 @@ def board(
     priority: str | None = None,
     status: str | None = None,
     q: str | None = None,
+    overdue: bool = False,
     page: int = 1,
 ) -> HTMLResponse:
     """Page 2: paginated, filterable, searchable board."""
     context = _board_context(
-        category=category, priority=priority, status=status, q=q, page=page
+        category=category, priority=priority, status=status, q=q, overdue=overdue, page=page
     )
     return templates.TemplateResponse(
         request,
@@ -307,11 +314,12 @@ def ui_tickets_table(
     priority: str | None = None,
     status: str | None = None,
     q: str | None = None,
+    overdue: bool = False,
     page: int = 1,
 ) -> HTMLResponse:
     """HTML fragment with the paginated board table (HTMX live filter/search/paging)."""
     context = _board_context(
-        category=category, priority=priority, status=status, q=q, page=page
+        category=category, priority=priority, status=status, q=q, overdue=overdue, page=page
     )
     return templates.TemplateResponse(request, "_board_table.html", context)
 
@@ -326,6 +334,31 @@ def ui_ticket_detail(
         raise HTTPException(status_code=404, detail="Ticket not found")
     return templates.TemplateResponse(
         request, "_ticket_detail.html", {"ticket": ticket, "users": db.list_users()}
+    )
+
+
+@app.post("/ui/tickets/{ticket_id}/status", response_class=HTMLResponse)
+def ui_set_status(
+    request: Request,
+    ticket_id: int,
+    user: dict = Depends(require_user),
+    new_status: str = Form(...),
+) -> HTMLResponse:
+    """Change a ticket's status from the UI (start / resolve / reopen).
+
+    Returns the refreshed detail modal and fires the ``ticketUpdated`` HX-Trigger
+    so the board table behind the modal reloads.
+    """
+    if db.get_ticket(ticket_id) is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if new_status not in ALLOWED_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status: {new_status}")
+    ticket = db.update_ticket(ticket_id, {"status": new_status})
+    return templates.TemplateResponse(
+        request,
+        "_ticket_detail.html",
+        {"ticket": ticket, "users": db.list_users()},
+        headers={"HX-Trigger": "ticketUpdated"},
     )
 
 

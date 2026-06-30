@@ -40,9 +40,20 @@
       {% for s in statuses %}<option value="{{ s }}" {% if s == f_status %}selected{% endif %}>{{ s }}</option>{% endfor %}
     </select>
   </label>
+  <label class="flex items-center gap-2 sm:col-span-2 xl:col-span-4">
+    <input type="checkbox" name="overdue" value="1" {% if f_overdue %}checked{% endif %}
+           class="h-4 w-4 rounded border-navy-300 text-red-600 focus:ring-red-200">
+    <span class="text-sm font-medium text-navy-700">Solo vencidos</span>
+  </label>
 </form>
 
-<section id="board-table" class="mt-4">
+<!-- The table reloads on filter changes and whenever a ticket's status changes
+     (ticketUpdated, fired by the detail modal actions). -->
+<section id="board-table" class="mt-4"
+         hx-get="/ui/tickets"
+         hx-include="#board-filters"
+         hx-trigger="ticketUpdated from:body"
+         hx-swap="innerHTML">
   {% include "_board_table.html" %}
 </section>
 {% endblock %}

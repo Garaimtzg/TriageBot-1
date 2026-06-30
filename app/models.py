@@ -1,7 +1,9 @@
 """Domain models / Pydantic schemas for TriageBot."""
 
+from __future__ import annotations
+
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, field_validator
 
@@ -14,6 +16,10 @@ _validation_cfg = _cfg["validation"]
 ALLOWED_CATEGORIES = set(_ticket_cfg["categories"])
 ALLOWED_PRIORITIES = set(_ticket_cfg["priorities"])
 ALLOWED_STATUSES = set(_ticket_cfg["statuses"])
+
+# Estados terminales (no cuentan como vencidos) y plazo SLA por prioridad.
+TERMINAL_STATUSES = set(_ticket_cfg.get("terminal_statuses", []))
+SLA_DAYS = {str(k): int(v) for k, v in _ticket_cfg.get("sla_days", {}).items()}
 
 TITLE_MAX_LEN = int(_validation_cfg["title_max_len"])
 DESCRIPTION_MAX_LEN = int(_validation_cfg["description_max_len"])
@@ -108,6 +114,9 @@ class Ticket(BaseModel):
     assignees: list[User] = []
     created_at: datetime
     updated_at: datetime
+    # Fecha límite derivada de la prioridad (SLA) y si está vencido a día de hoy.
+    due_date: date | None = None
+    is_overdue: bool = False
 
 
 class UserCreate(BaseModel):
