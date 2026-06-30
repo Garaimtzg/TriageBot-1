@@ -120,6 +120,11 @@ def list_tickets(
     )
 
 
+@app.get("/tickets/stats")
+def ticket_stats() -> dict:
+    return db.get_ticket_stats()
+
+
 @app.patch("/tickets/{ticket_id}")
 def update_ticket(ticket_id: int, payload: TicketUpdate) -> dict:
     if db.get_ticket(ticket_id) is None:

@@ -360,6 +360,37 @@ def count_tickets(
         return int(conn.execute(query, params).fetchone()["n"])
 
 
+def get_ticket_stats() -> dict:
+    """Return aggregate counts of tickets by category, priority and status."""
+    init_db()
+    with _connect() as conn:
+        total = int(conn.execute("SELECT COUNT(*) AS n FROM tickets").fetchone()["n"])
+        by_category = {
+            row["category"]: int(row["n"])
+            for row in conn.execute(
+                "SELECT category, COUNT(*) AS n FROM tickets GROUP BY category ORDER BY category"
+            ).fetchall()
+        }
+        by_priority = {
+            row["priority"]: int(row["n"])
+            for row in conn.execute(
+                "SELECT priority, COUNT(*) AS n FROM tickets GROUP BY priority ORDER BY priority"
+            ).fetchall()
+        }
+        by_status = {
+            row["status"]: int(row["n"])
+            for row in conn.execute(
+                "SELECT status, COUNT(*) AS n FROM tickets GROUP BY status ORDER BY status"
+            ).fetchall()
+        }
+    return {
+        "total": total,
+        "by_category": by_category,
+        "by_priority": by_priority,
+        "by_status": by_status,
+    }
+
+
 def update_ticket(ticket_id: int, fields: dict) -> dict | None:
     """Update the given fields of a ticket and bump updated_at. Returns the ticket.
 
