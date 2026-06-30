@@ -1,5 +1,5 @@
 {% from "_macros.html" import priority_badge, status_badge %}
-<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-navy-100">
+<div class="overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-navy-100">
   <table class="min-w-full divide-y divide-navy-100">
     <thead class="bg-navy-800 text-white">
       <tr>
@@ -32,7 +32,7 @@
 </div>
 
 <!-- Pagination -->
-<div class="mt-4 flex items-center justify-between text-sm text-navy-600">
+<div class="mt-4 flex flex-col gap-3 text-sm text-navy-600 sm:flex-row sm:items-center sm:justify-between">
   <span>{{ total }} ticket{{ "s" if total != 1 else "" }} · Página {{ page }} de {{ total_pages }}</span>
   <div class="flex items-center gap-2">
     <button type="button"

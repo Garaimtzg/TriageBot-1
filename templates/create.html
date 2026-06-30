@@ -2,10 +2,10 @@
 {% block title %} · Nuevo ticket{% endblock %}
 
 {% block content %}
-<div class="grid gap-8 md:grid-cols-5">
+<div class="grid gap-6 lg:grid-cols-3 lg:gap-8 xl:grid-cols-5">
   <!-- Create form -->
-  <section class="md:col-span-3">
-    <h1 class="text-2xl font-bold tracking-tight">Registrar ticket</h1>
+  <section class="lg:col-span-2 xl:col-span-3">
+    <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">Registrar ticket</h1>
     <p class="mt-1 text-sm text-navy-500">
       Escribe el título y la descripción. La IA lo clasificará automáticamente.
     </p>
@@ -41,7 +41,8 @@
   </section>
 
   <!-- Recent tickets -->
-  <section class="md:col-span-2">
+  <section class="lg:col-span-1 xl:col-span-2">
+    <div class="lg:sticky lg:top-8">
     <h2 class="text-sm font-semibold uppercase tracking-wide text-navy-500">Últimos tickets</h2>
     <div id="recent-list" class="mt-3">
       {% include "_recent_list.html" %}
@@ -49,6 +50,7 @@
     <a href="/board" class="mt-4 inline-block text-sm font-medium text-navy-600 hover:text-navy-800">
       Ver tablero completo →
     </a>
+    </div>
   </section>
 </div>
 
