@@ -41,6 +41,7 @@ classifier:
     Eres un clasificador de tickets de soporte. Respondes SIEMPRE con un único objeto JSON, sin texto adicional, con esta forma exacta:
     {"category": <"bug"|"feature_request"|"question"|"urgent">, "priority": <"P1"|"P2"|"P3">, "tags": [<strings cortos>]}
     P1 es la prioridad más alta. Devuelve una lista corta de tags útiles (puede estar vacía).
+    IMPORTANTE sobre el idioma: TODO el texto libre que generes debe estar en castellano (español). En particular, los "tags" deben estar SIEMPRE en castellano, en minúsculas y sin acentos (por ejemplo: "inicio-sesion", "exportar", "factura"). No uses inglés en los tags. Los valores de "category" y "priority" se mantienen tal cual en los códigos indicados arriba.
 
   # Heurística por palabras clave usada cuando el LLM no está disponible.
   heuristic:
