@@ -12,8 +12,18 @@
 ticket:
   categories: [bug, feature_request, question, urgent]
   priorities: [P1, P2, P3]
-  statuses: [open, in_progress, closed]
+  # Ciclo de vida: abierto -> en curso -> resuelto (y se puede reabrir).
+  # "closed" se mantiene por compatibilidad y como archivado manual.
+  statuses: [open, in_progress, resolved, closed]
   default_status: open
+  # Estados terminales: un ticket en estos estados NO cuenta como vencido.
+  terminal_statuses: [resolved, closed]
+  # Plazo (SLA) en días desde la creación, según prioridad:
+  # P1 = hoy mismo, P2 = mañana, P3 = un par de días.
+  sla_days:
+    P1: 0
+    P2: 1
+    P3: 2
 
 validation:
   title_max_len: 200

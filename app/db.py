@@ -11,12 +11,15 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from app.config import get_config
 
 _db_cfg = get_config()["database"]
-_DEFAULT_STATUS = get_config()["ticket"]["default_status"]
+_ticket_cfg = get_config()["ticket"]
+_DEFAULT_STATUS = _ticket_cfg["default_status"]
+_SLA_DAYS = {str(k): int(v) for k, v in _ticket_cfg.get("sla_days", {}).items()}
+_TERMINAL_STATUSES = set(_ticket_cfg.get("terminal_statuses", []))
 
 
 def _database_path() -> str:
@@ -33,6 +36,22 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _today() -> str:
+    """Today's date (UTC) as ISO ``YYYY-MM-DD`` for due-date comparisons."""
+    return datetime.now(UTC).date().isoformat()
+
+
+def _compute_due_date(created_iso: str, priority: str) -> str | None:
+    """Derive the due date (ISO ``YYYY-MM-DD``) from the creation date + SLA.
+
+    Returns ``None`` if the priority has no configured SLA.
+    """
+    if priority not in _SLA_DAYS:
+        return None
+    created_day = date.fromisoformat(created_iso[:10])
+    return (created_day + timedelta(days=_SLA_DAYS[priority])).isoformat()
+
+
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(_database_path())
     conn.row_factory = sqlite3.Row
@@ -40,7 +59,7 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create the tickets table if it does not exist yet."""
+    """Create the tickets table if it does not exist yet, then run migrations."""
     with _connect() as conn:
         conn.execute(
             """
@@ -53,14 +72,38 @@ def init_db() -> None:
                 tags TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL DEFAULT 'open',
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                due_date TEXT
             )
             """
         )
+        _migrate(conn)
         conn.commit()
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Lightweight migrations for databases created by older versions."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    if "due_date" not in columns:
+        conn.execute("ALTER TABLE tickets ADD COLUMN due_date TEXT")
+    # Backfill due_date for rows that predate the SLA feature.
+    for row in conn.execute(
+        "SELECT id, created_at, priority FROM tickets WHERE due_date IS NULL"
+    ).fetchall():
+        due = _compute_due_date(row["created_at"], row["priority"])
+        if due is not None:
+            conn.execute(
+                "UPDATE tickets SET due_date = ? WHERE id = ?", (due, row["id"])
+            )
+
+
 def _row_to_dict(row: sqlite3.Row) -> dict:
+    due_date = row["due_date"]
+    status = row["status"]
+    # Vencido = tiene fecha límite pasada y no está en un estado terminal.
+    is_overdue = (
+        due_date is not None and status not in _TERMINAL_STATUSES and due_date < _today()
+    )
     return {
         "id": row["id"],
         "title": row["title"],
@@ -71,6 +114,8 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "status": row["status"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        "due_date": due_date,
+        "is_overdue": is_overdue,
     }
 
 
@@ -86,14 +131,19 @@ def create_ticket(
     """Insert a ticket and return it as a dict."""
     init_db()
     now = _now()
+    due_date = _compute_due_date(now, priority)
     with _connect() as conn:
         cursor = conn.execute(
             """
             INSERT INTO tickets
-                (title, description, category, priority, tags, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (title, description, category, priority, tags, status,
+                 created_at, updated_at, due_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (title, description, category, priority, json.dumps(tags), status, now, now),
+            (
+                title, description, category, priority, json.dumps(tags),
+                status, now, now, due_date,
+            ),
         )
         conn.commit()
         ticket_id = cursor.lastrowid
@@ -112,6 +162,7 @@ def _filter_sql(
     priority: str | None,
     status: str | None,
     search: str | None,
+    overdue: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Build the shared WHERE clauses/params used by list_tickets and count_tickets."""
     clauses: list[str] = []
@@ -129,6 +180,14 @@ def _filter_sql(
         # Case-insensitive substring match on the title.
         clauses.append("LOWER(title) LIKE ?")
         params.append(f"%{search.lower()}%")
+    if overdue:
+        # Vencidos: con fecha límite pasada y fuera de los estados terminales.
+        clauses.append("due_date IS NOT NULL AND due_date < ?")
+        params.append(_today())
+        if _TERMINAL_STATUSES:
+            placeholders = ", ".join("?" for _ in _TERMINAL_STATUSES)
+            clauses.append(f"status NOT IN ({placeholders})")
+            params.extend(sorted(_TERMINAL_STATUSES))
     return clauses, params
 
 
@@ -138,17 +197,19 @@ def list_tickets(
     priority: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    overdue: bool = False,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[dict]:
     """Return tickets (newest first), optionally filtered, searched and paginated.
 
-    ``search`` matches a case-insensitive substring of the title. When ``limit``
+    ``search`` matches a case-insensitive substring of the title. ``overdue``
+    keeps only past-due tickets that are not in a terminal status. When ``limit``
     is given the result is paginated (``offset`` rows are skipped first); with no
     ``limit`` every matching ticket is returned (backwards-compatible default).
     """
     init_db()
-    clauses, params = _filter_sql(category, priority, status, search)
+    clauses, params = _filter_sql(category, priority, status, search, overdue)
 
     query = "SELECT * FROM tickets"
     if clauses:
@@ -169,10 +230,11 @@ def count_tickets(
     priority: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    overdue: bool = False,
 ) -> int:
     """Count tickets matching the same filters as :func:`list_tickets` (for pagination)."""
     init_db()
-    clauses, params = _filter_sql(category, priority, status, search)
+    clauses, params = _filter_sql(category, priority, status, search, overdue)
     query = "SELECT COUNT(*) AS n FROM tickets"
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
@@ -187,6 +249,13 @@ def update_ticket(ticket_id: int, fields: dict) -> dict | None:
     updates = {key: value for key, value in fields.items() if key in allowed and value is not None}
     if not updates:
         return get_ticket(ticket_id)
+
+    # La fecha límite depende de la prioridad: si cambia, se recalcula desde la
+    # fecha de creación del ticket.
+    if "priority" in updates:
+        current = get_ticket(ticket_id)
+        if current is not None:
+            updates["due_date"] = _compute_due_date(current["created_at"], updates["priority"])
 
     set_clause = ", ".join(f"{key} = ?" for key in updates)
     params = list(updates.values())

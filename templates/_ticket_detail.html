@@ -1,4 +1,4 @@
-{% from "_macros.html" import priority_badge, status_badge, category_badge %}
+{% from "_macros.html" import priority_badge, status_badge, category_badge, due_cell %}
 <!-- Backdrop: clicking it closes the modal. -->
 <div class="fixed inset-0 z-50 grid place-items-center bg-navy-900/50 p-4"
      onclick="if(event.target === this) document.getElementById('modal').innerHTML='';">
@@ -44,6 +44,10 @@
 
       <dl class="grid grid-cols-2 gap-4 border-t border-navy-100 pt-4 text-sm">
         <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-navy-500">Vence</dt>
+          <dd class="mt-0.5">{{ due_cell(ticket) }}</dd>
+        </div>
+        <div>
           <dt class="text-xs font-semibold uppercase tracking-wide text-navy-500">Creado</dt>
           <dd class="mt-0.5 text-navy-800">{{ ticket.created_at }}</dd>
         </div>
@@ -52,6 +56,32 @@
           <dd class="mt-0.5 text-navy-800">{{ ticket.updated_at }}</dd>
         </div>
       </dl>
+    </div>
+
+    <!-- Acciones de ciclo de vida: empezar / resolver / reabrir. -->
+    <div class="flex flex-wrap items-center gap-2 border-t border-navy-100 px-6 py-4">
+      {% if ticket.status == "open" %}
+      <button type="button"
+              hx-post="/ui/tickets/{{ ticket.id }}/status" hx-vals='{"new_status": "in_progress"}'
+              hx-target="#modal" hx-swap="innerHTML"
+              class="rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-amber-600">
+        Empezar
+      </button>
+      {% elif ticket.status == "in_progress" %}
+      <button type="button"
+              hx-post="/ui/tickets/{{ ticket.id }}/status" hx-vals='{"new_status": "resolved"}'
+              hx-target="#modal" hx-swap="innerHTML"
+              class="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
+        Resolver
+      </button>
+      {% else %}
+      <button type="button"
+              hx-post="/ui/tickets/{{ ticket.id }}/status" hx-vals='{"new_status": "open"}'
+              hx-target="#modal" hx-swap="innerHTML"
+              class="rounded-lg bg-navy-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-navy-800">
+        Reabrir
+      </button>
+      {% endif %}
     </div>
   </div>
 </div>
