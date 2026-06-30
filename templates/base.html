@@ -37,6 +37,7 @@
         <span class="text-lg font-semibold tracking-tight">TriageBot</span>
       </div>
       <div class="flex items-center gap-1 text-sm font-medium">
+        {% if current_user %}
         <a href="/"
            class="rounded-md px-3 py-2 transition {% if active == 'create' %}bg-white text-navy-900{% else %}text-navy-100 hover:bg-navy-700{% endif %}">
           Nuevo ticket
@@ -45,6 +46,16 @@
            class="rounded-md px-3 py-2 transition {% if active == 'board' %}bg-white text-navy-900{% else %}text-navy-100 hover:bg-navy-700{% endif %}">
           Tablero
         </a>
+        <span class="ml-2 hidden items-center gap-2 border-l border-navy-700 pl-3 sm:flex">
+          <span class="grid h-7 w-7 place-items-center rounded-full bg-navy-600 text-xs font-bold">{{ current_user.name[0]|upper }}</span>
+          <span class="text-navy-100">{{ current_user.name }}</span>
+        </span>
+        <form action="/logout" method="post" class="ml-1">
+          <button type="submit" class="rounded-md px-3 py-2 text-navy-100 transition hover:bg-navy-700">
+            Cerrar sesión
+          </button>
+        </form>
+        {% endif %}
       </div>
     </nav>
   </header>

@@ -6,6 +6,11 @@ PyYAML==6.0.2
 openai==1.59.6
 jinja2==3.1.5
 python-multipart==0.0.20
+passlib[bcrypt]==1.7.4
+# passlib 1.7.4 no sabe leer la versión de bcrypt >= 4.1 (warning ruidoso, sin
+# impacto funcional); fijamos 4.0.1, que passlib lee correctamente.
+bcrypt==4.0.1
+itsdangerous==2.2.0
 pytest==8.3.4
 pytest-cov==6.0.0
 httpx==0.28.1

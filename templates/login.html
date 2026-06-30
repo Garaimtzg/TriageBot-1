@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %} · Iniciar sesión{% endblock %}
+
+{% block content %}
+<div class="mx-auto mt-8 w-full max-w-md">
+  <div class="rounded-xl bg-white p-8 shadow-sm ring-1 ring-navy-100">
+    <h1 class="text-2xl font-bold tracking-tight">Iniciar sesión</h1>
+    <p class="mt-1 text-sm text-navy-500">Accede para gestionar tickets y responsables.</p>
+
+    {% if error %}
+    <div class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-100">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form class="mt-6 space-y-4" action="/login" method="post">
+      <label class="block">
+        <span class="text-sm font-semibold text-navy-700">Email</span>
+        <input type="email" name="email" required value="{{ email or '' }}"
+               class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm shadow-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
+               placeholder="tu@correo.com">
+      </label>
+      <label class="block">
+        <span class="text-sm font-semibold text-navy-700">Contraseña</span>
+        <input type="password" name="password" required
+               class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm shadow-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200">
+      </label>
+      <button type="submit"
+              class="w-full rounded-lg bg-navy-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-800">
+        Entrar
+      </button>
+    </form>
+
+    <p class="mt-6 text-center text-sm text-navy-500">
+      ¿No tienes cuenta?
+      <a href="/register" class="font-medium text-navy-700 hover:text-navy-900">Crear cuenta</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

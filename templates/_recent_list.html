@@ -1,4 +1,4 @@
-{% from "_macros.html" import priority_badge, status_badge %}
+{% from "_macros.html" import priority_badge, status_badge, assignee_badges %}
 <ul class="space-y-2">
   {% for ticket in recent %}
   <li class="rounded-lg bg-white p-3 shadow-sm ring-1 ring-navy-100">
@@ -10,6 +10,7 @@
       {{ priority_badge(ticket.priority) }}
       {{ status_badge(ticket.status) }}
     </div>
+    <div class="mt-2">{{ assignee_badges(ticket.assignees) }}</div>
   </li>
   {% else %}
   <li class="rounded-lg bg-white p-4 text-center text-sm text-navy-400 ring-1 ring-navy-100">
