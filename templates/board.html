@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %} · Tablero{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold tracking-tight">Tablero de tickets</h1>
+<p class="mt-1 text-sm text-navy-500">Filtra por columna o busca por título. Haz clic en un ticket para ver el detalle.</p>
+
+<!-- Filters + search. Any change reloads the table fragment (resets to page 1). -->
+<form
+  id="board-filters"
+  class="mt-6 grid gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100 sm:grid-cols-2 lg:grid-cols-4"
+  hx-get="/ui/tickets"
+  hx-target="#board-table"
+  hx-swap="innerHTML"
+  hx-trigger="change, keyup changed delay:300ms from:input[name='q']"
+>
+  <label class="block sm:col-span-2 lg:col-span-1">
+    <span class="text-xs font-semibold uppercase tracking-wide text-navy-500">Buscar título</span>
+    <input type="search" name="q" value="{{ f_q }}" placeholder="p. ej. exportar…"
+           class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200">
+  </label>
+  <label class="block">
+    <span class="text-xs font-semibold uppercase tracking-wide text-navy-500">Categoría</span>
+    <select name="category" class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200">
+      <option value="">Todas</option>
+      {% for c in categories %}<option value="{{ c }}" {% if c == f_category %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="block">
+    <span class="text-xs font-semibold uppercase tracking-wide text-navy-500">Prioridad</span>
+    <select name="priority" class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200">
+      <option value="">Todas</option>
+      {% for p in priorities %}<option value="{{ p }}" {% if p == f_priority %}selected{% endif %}>{{ p }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="block">
+    <span class="text-xs font-semibold uppercase tracking-wide text-navy-500">Estado</span>
+    <select name="status" class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200">
+      <option value="">Todos</option>
+      {% for s in statuses %}<option value="{{ s }}" {% if s == f_status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+</form>
+
+<section id="board-table" class="mt-4">
+  {% include "_board_table.html" %}
+</section>
+{% endblock %}

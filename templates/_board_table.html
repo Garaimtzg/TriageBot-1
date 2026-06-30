@@ -1,0 +1,57 @@
+{% from "_macros.html" import priority_badge, status_badge %}
+<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-navy-100">
+  <table class="min-w-full divide-y divide-navy-100">
+    <thead class="bg-navy-800 text-white">
+      <tr>
+        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">ID</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Título</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Prioridad</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Estado</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-navy-50">
+      {% for ticket in tickets %}
+      <tr class="cursor-pointer transition hover:bg-navy-50"
+          hx-get="/ui/tickets/{{ ticket.id }}"
+          hx-target="#modal"
+          hx-swap="innerHTML">
+        <td class="px-4 py-3 text-sm text-navy-400">#{{ ticket.id }}</td>
+        <td class="px-4 py-3 text-sm font-medium text-navy-900">{{ ticket.title }}</td>
+        <td class="px-4 py-3 text-sm">{{ priority_badge(ticket.priority) }}</td>
+        <td class="px-4 py-3 text-sm">{{ status_badge(ticket.status) }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="px-4 py-10 text-center text-sm text-navy-400">
+          No hay tickets que coincidan con los filtros.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Pagination -->
+<div class="mt-4 flex items-center justify-between text-sm text-navy-600">
+  <span>{{ total }} ticket{{ "s" if total != 1 else "" }} · Página {{ page }} de {{ total_pages }}</span>
+  <div class="flex items-center gap-2">
+    <button type="button"
+            class="rounded-lg border border-navy-200 px-3 py-1.5 font-medium transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-40"
+            hx-get="/ui/tickets?page={{ page - 1 }}"
+            hx-include="#board-filters"
+            hx-target="#board-table"
+            hx-swap="innerHTML"
+            {% if page <= 1 %}disabled{% endif %}>
+      ‹ Anterior
+    </button>
+    <button type="button"
+            class="rounded-lg border border-navy-200 px-3 py-1.5 font-medium transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-40"
+            hx-get="/ui/tickets?page={{ page + 1 }}"
+            hx-include="#board-filters"
+            hx-target="#board-table"
+            hx-swap="innerHTML"
+            {% if page >= total_pages %}disabled{% endif %}>
+      Siguiente ›
+    </button>
+  </div>
+</div>

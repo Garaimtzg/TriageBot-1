@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %} · Nuevo ticket{% endblock %}
+
+{% block content %}
+<div class="grid gap-8 md:grid-cols-5">
+  <!-- Create form -->
+  <section class="md:col-span-3">
+    <h1 class="text-2xl font-bold tracking-tight">Registrar ticket</h1>
+    <p class="mt-1 text-sm text-navy-500">
+      Escribe el título y la descripción. La IA lo clasificará automáticamente.
+    </p>
+
+    <form
+      class="mt-6 space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-navy-100"
+      hx-post="/ui/tickets"
+      hx-target="#recent-list"
+      hx-swap="innerHTML"
+      hx-indicator="#thinking"
+      hx-disabled-elt="find button[type='submit']"
+      hx-on::after-request="if(event.detail.successful) this.reset()"
+    >
+      <label class="block">
+        <span class="text-sm font-semibold text-navy-700">Título</span>
+        <input name="title" required maxlength="200"
+               class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm shadow-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
+               placeholder="La app no carga">
+      </label>
+      <label class="block">
+        <span class="text-sm font-semibold text-navy-700">Descripción</span>
+        <textarea name="description" required maxlength="5000" rows="5"
+                  class="mt-1 w-full rounded-lg border border-navy-200 px-3 py-2 text-sm shadow-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
+                  placeholder="Desde esta mañana aparece una pantalla en blanco al iniciar sesión…"></textarea>
+      </label>
+      <div class="flex justify-end">
+        <button type="submit"
+                class="inline-flex items-center gap-2 rounded-lg bg-navy-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-60">
+          Clasificar y crear
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Recent tickets -->
+  <section class="md:col-span-2">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-navy-500">Últimos tickets</h2>
+    <div id="recent-list" class="mt-3">
+      {% include "_recent_list.html" %}
+    </div>
+    <a href="/board" class="mt-4 inline-block text-sm font-medium text-navy-600 hover:text-navy-800">
+      Ver tablero completo →
+    </a>
+  </section>
+</div>
+
+<!-- "Thinking" overlay shown while the model classifies the ticket -->
+<div id="thinking" class="htmx-indicator fixed inset-0 z-40 grid place-items-center bg-navy-900/40 backdrop-blur-sm">
+  <div class="flex flex-col items-center gap-4 rounded-2xl bg-white px-10 py-8 shadow-xl ring-1 ring-navy-100">
+    <span class="h-10 w-10 animate-spin rounded-full border-4 border-navy-200 border-t-navy-700"></span>
+    <p class="text-sm font-medium text-navy-700">
+      Clasificando con IA<span class="animate-pulse">…</span>
+    </p>
+  </div>
+</div>
+{% endblock %}
