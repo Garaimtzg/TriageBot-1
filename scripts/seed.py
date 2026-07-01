@@ -19,11 +19,17 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
 from pathlib import Path
 
-from app import auth, classifier, db
-
+# Permite ejecutar el script directamente (``python scripts/seed.py``) añadiendo
+# la raíz del repo al path para poder importar el paquete ``app``.
 BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from app import auth, classifier, db  # noqa: E402
+
 SEED_FILE = BASE_DIR / "seed_tickets.json"
 
 DEMO_USERS = [
